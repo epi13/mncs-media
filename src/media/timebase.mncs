@@ -1,0 +1,79 @@
+mncs 0.18;
+
+// mncs.media.timebase.v1 — rational rates and exact sample/frame indexing.
+//
+// Frame rates and sample rates are rational (num/den), never bare
+// floats: 30000/1001 fps must not drift. Durations are integer
+// microseconds derived by multiply-then-divide so the truncation
+// point is explicit. This module serves image timelines today and
+// audio/video streams when those backends land; it is not a calendar.
+
+module mncs.media.timebase.v1;
+
+// Rate in ticks per second: fps = num / den, sample_rate = num / 1.
+record Rational { num: u64, den: u64 }
+
+fn rational(num: u64, den: u64) -> (result: Rational) {
+    return Rational { num: num, den: den };
+}
+
+enum RateCheck { Ok, ZeroDen, ZeroNum }
+
+fn check_rate(r: Rational) -> (result: RateCheck) {
+    if r.den == 0 {
+        return RateCheck.ZeroDen;
+    }
+    if r.num == 0 {
+        return RateCheck.ZeroNum;
+    }
+    return RateCheck.Ok;
+}
+
+fn rate_is_ok(c: RateCheck) -> (result: bool) {
+    return match c {
+        RateCheck.Ok => true,
+        RateCheck.ZeroDen => false,
+        RateCheck.ZeroNum => false,
+    };
+}
+
+// Bounded Euclid GCD: 64 steps always run; values stabilize early.
+record GcdState { a: u64, b: u64 }
+
+fn gcd_step(s: GcdState) -> (result: GcdState) {
+    if s.b == 0 {
+        return s;
+    }
+    return GcdState { a: s.b, b: s.a % s.b };
+}
+
+fn gcd(a: u64, b: u64) -> (result: u64) {
+    iterate i up_to 64 carrying s: GcdState = GcdState { a: a, b: b } {
+        next s = gcd_step(s);
+    }
+    return s.a;
+}
+
+// Lowest-terms reduction. Total past check_rate (den != 0 there, and
+// gcd(num, den) >= 1 whenever den != 0... with num == 0 rejected too,
+// the divisor is always nonzero here).
+fn reduce_rate(r: Rational) -> (result: Rational) {
+    let g: u64 = gcd(r.num, r.den);
+    return Rational { num: r.num / g, den: r.den / g };
+}
+
+// Exact equality of two rates by cross-multiplication.
+fn rate_equal(a: Rational, b: Rational) -> (result: bool) {
+    return a.num * b.den == b.num * a.den;
+}
+
+// Duration of `frames` ticks in whole microseconds, truncated.
+// Ordering (frames * 1e6 * den / num) keeps the truncation explicit.
+fn frames_to_micros(frames: u64, r: Rational) -> (result: u64) {
+    return frames * 1000000 * r.den / r.num;
+}
+
+// Whole ticks covered by `micros` microseconds, truncated.
+fn micros_to_frames(micros: u64, r: Rational) -> (result: u64) {
+    return micros * r.num / r.den / 1000000;
+}

@@ -1,0 +1,55 @@
+mncs 0.18;
+
+// Native contracts for rational timebases: validation, GCD reduction,
+// exact equality, and frame/duration conversion. All integer math.
+
+module mncs.media.test.timebase.v1;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.media.timebase;
+
+test rate_validation() -> (result: TestResult) {
+    // 30000/1001 (NTSC fractional fps) is a valid rate.
+    let ok: bool = rate_is_ok(check_rate(rational(30000, 1001)));
+    let zd: bool = match check_rate(rational(24, 0)) {
+        RateCheck.Ok => false,
+        RateCheck.ZeroDen => true,
+        RateCheck.ZeroNum => false,
+    };
+    let zn: bool = match check_rate(rational(0, 1)) {
+        RateCheck.Ok => false,
+        RateCheck.ZeroDen => false,
+        RateCheck.ZeroNum => true,
+    };
+    return from_assertion(equals_bool(true, ok && zd && zn, 6301));
+}
+
+test gcd_and_reduction() -> (result: TestResult) {
+    let g: bool = gcd(30000, 1001) == 1 && gcd(24, 36) == 12 && gcd(48000, 1) == 1;
+    // 24/36 reduces to 2/3; 30000/1001 is already lowest terms.
+    let r1: Rational = reduce_rate(rational(24, 36));
+    let red: bool = r1.num == 2 && r1.den == 3;
+    let r2: Rational = reduce_rate(rational(30000, 1001));
+    let same: bool = r2.num == 30000 && r2.den == 1001;
+    return from_assertion(equals_bool(true, g && red && same, 6302));
+}
+
+test rate_equality_cross_multiplied() -> (result: TestResult) {
+    // 24/1 == 48/2 exactly, without any floating-point fps field.
+    let eq: bool = rate_equal(rational(24, 1), rational(48, 2));
+    let ne: bool = rate_equal(rational(24, 1), rational(30000, 1001)) == false;
+    return from_assertion(equals_bool(true, eq && ne, 6303));
+}
+
+test frames_and_duration_round_trip() -> (result: TestResult) {
+    // 24 fps: 48 frames cover exactly 2 seconds (2_000_000 us).
+    let micros: u64 = frames_to_micros(48, rational(24, 1));
+    let back: u64 = micros_to_frames(micros, rational(24, 1));
+    let ok: bool = micros == 2000000 && back == 48;
+    // NTSC: 30000 frames at 30000/1001 cover 1_001_000_000 us... in
+    // whole microseconds: 30000 * 1e6 * 1001 / 30000 = 1_001_000_000.
+    let ntsc: u64 = frames_to_micros(30000, rational(30000, 1001));
+    let ok2: bool = ntsc == 1001000000;
+    return from_assertion(equals_bool(true, ok && ok2, 6304));
+}

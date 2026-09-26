@@ -1,0 +1,55 @@
+mncs 0.18;
+
+// mncs.media.pixels.v1 — native pixel ops on small decoded tiles.
+//
+// These kernels prove transform semantics natively on bounded decoded
+// values; they are not a codec and not a renderer. Convention is
+// explicit and pinned: top-left nearest-neighbor sampling
+// (out[r][c] = in[2r][2c]) for 2x downscale, row-major flat buffers,
+// no stride. Backends may sample differently (Pillow NEAREST uses
+// center sampling for even factors) — that difference is a declared
+// convention mismatch, not a bug on either side, and the integration
+// checks pin both conventions independently.
+
+module mncs.media.pixels.v1;
+
+// 4x4 gray8 (16 bytes) -> 2x2 gray8 (4 bytes), top-left sampling.
+fn nn_downscale2_gray8(src: [byte; 16]) -> (result: [byte; 4]) {
+    return [src[0], src[2], src[8], src[10]];
+}
+
+// 4x4 interleaved RGB (48 bytes) -> 2x2 RGB (12 bytes), top-left.
+fn nn_downscale2_rgb(src: [byte; 48]) -> (result: [byte; 12]) {
+    let r0: u64 = 0;
+    let r2: u64 = 24;
+    return [
+        src[r0], src[r0 + 1], src[r0 + 2],
+        src[r0 + 6], src[r0 + 7], src[r0 + 8],
+        src[r2], src[r2 + 1], src[r2 + 2],
+        src[r2 + 6], src[r2 + 7], src[r2 + 8],
+    ];
+}
+
+// 2x2 crop of a 4x4 gray8 frame at origin (ox, oy).
+fn crop_gray8_4x4(src: [byte; 16], ox: u64, oy: u64) -> (result: [byte; 4]) {
+    let a: u64 = oy * 4 + ox;
+    let b: u64 = a + 1;
+    let c: u64 = a + 4;
+    let d: u64 = a + 5;
+    return [src[a], src[b], src[c], src[d]];
+}
+
+// Exact buffer equality over the bounded tiles above.
+fn eq_bytes4(a: [byte; 4], b: [byte; 4]) -> (result: bool) {
+    iterate i over a carrying same: bool = true {
+        next same = same && a[i] == b[i];
+    }
+    return same;
+}
+
+fn eq_bytes12(a: [byte; 12], b: [byte; 12]) -> (result: bool) {
+    iterate i over a carrying same: bool = true {
+        next same = same && a[i] == b[i];
+    }
+    return same;
+}

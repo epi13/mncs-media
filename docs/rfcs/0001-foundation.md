@@ -1,6 +1,21 @@
 # RFC 0001: Media pipeline foundation
 
-Status: Draft
+Status: Partially implemented (2026-09-26, image foundation slice)
+
+## Disposition
+
+- Implemented: untrusted-input structured errors (`failures`,
+  `limits`, trunc40/magic vectors); explicit rational timebase;
+  typed codec isolation (`tools/media_backend.py` argv/JSON
+  boundary); preservation/normalization/loss as distinct plan
+  policies; transform meaning pinned incl. the resampling-convention
+  difference (native top-left vs PIL center).
+- Superseded: nothing — no prior implementation existed.
+- Deferred by decision: bounded async streams (whole-frame bounded
+  path suffices); SIMD/GPU (no hot loop at this scale); plugin
+  discovery (closed enums + `Unmapped`); audio/video backends;
+  orientation normalization; color management.
+- Unchanged: all six principles remain normative.
 
 ## Principles
 

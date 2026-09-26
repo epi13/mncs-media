@@ -1,0 +1,100 @@
+mncs 0.18;
+
+// Native contracts for dimensions: validation, crop bounds discipline,
+// and exact resize geometry (fit/fill/stretch). All integer math.
+
+module mncs.media.test.dims.v1;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.media.dims;
+
+test dims_validation() -> (result: TestResult) {
+    let ok: bool = dims_are_ok(check_dims(dims(8, 6)));
+    let zw: bool = match check_dims(dims(0, 6)) {
+        DimsCheck.Ok => false,
+        DimsCheck.ZeroWidth => true,
+        DimsCheck.ZeroHeight => false,
+    };
+    let zh: bool = match check_dims(dims(8, 0)) {
+        DimsCheck.Ok => false,
+        DimsCheck.ZeroWidth => false,
+        DimsCheck.ZeroHeight => true,
+    };
+    return from_assertion(equals_bool(true, ok && zw && zh, 6201));
+}
+
+test crop_inside_frame() -> (result: TestResult) {
+    // grad8x6 crop (2,1,2,2) used by the vertical slice.
+    let good: bool = match plan_crop(dims(8, 6), CropRect { x: 2, y: 1, w: 2, h: 2 }) {
+        CropOut.Value { out } => out.w == 2 && out.h == 2,
+        CropOut.OutOfBounds => false,
+        CropOut.Empty => false,
+    };
+    let full: bool = match plan_crop(dims(8, 6), CropRect { x: 0, y: 0, w: 8, h: 6 }) {
+        CropOut.Value { out } => out.w == 8 && out.h == 6,
+        CropOut.OutOfBounds => false,
+        CropOut.Empty => false,
+    };
+    return from_assertion(equals_bool(true, good && full, 6202));
+}
+
+test crop_out_of_bounds_rejected() -> (result: TestResult) {
+    // Overhang, past-origin, and empty rects are structured outcomes.
+    let overhang: bool = match plan_crop(dims(8, 6), CropRect { x: 7, y: 0, w: 2, h: 2 }) {
+        CropOut.Value { out } => out.w != out.w,
+        CropOut.OutOfBounds => true,
+        CropOut.Empty => false,
+    };
+    let past: bool = match plan_crop(dims(8, 6), CropRect { x: 8, y: 0, w: 1, h: 1 }) {
+        CropOut.Value { out } => out.w != out.w,
+        CropOut.OutOfBounds => true,
+        CropOut.Empty => false,
+    };
+    let empty: bool = match plan_crop(dims(8, 6), CropRect { x: 0, y: 0, w: 0, h: 2 }) {
+        CropOut.Value { out } => out.w != out.w,
+        CropOut.OutOfBounds => false,
+        CropOut.Empty => true,
+    };
+    return from_assertion(equals_bool(true, overhang && past && empty, 6203));
+}
+
+test resize_stretch_exact() -> (result: TestResult) {
+    let good: bool = match plan_resize(dims(8, 6), ResizeSpec { target: dims(4, 4), mode: ResizeMode.Stretch }) {
+        ResizeOut.Value { out, window } => out.w == 4 && out.h == 4,
+        ResizeOut.BadTarget => false,
+    };
+    return from_assertion(equals_bool(true, good, 6204));
+}
+
+test resize_fit_preserves_aspect() -> (result: TestResult) {
+    // 8x6 into 4x4 by fit: 4x3 (4:3 preserved, exact integers).
+    let good: bool = match plan_resize(dims(8, 6), ResizeSpec { target: dims(4, 4), mode: ResizeMode.Fit }) {
+        ResizeOut.Value { out, window } => out.w == 4 && out.h == 3,
+        ResizeOut.BadTarget => false,
+    };
+    // Tall frame into wide target: 6x8 into 4x4 fits to 3x4.
+    let tall: bool = match plan_resize(dims(6, 8), ResizeSpec { target: dims(4, 4), mode: ResizeMode.Fit }) {
+        ResizeOut.Value { out, window } => out.w == 3 && out.h == 4,
+        ResizeOut.BadTarget => false,
+    };
+    return from_assertion(equals_bool(true, good && tall, 6205));
+}
+
+test resize_fill_reports_window() -> (result: TestResult) {
+    // 8x6 to cover 4x4: output is the target; source window is the
+    // centered 6x6 crop (x=1), so the follow-up crop stays explicit.
+    let good: bool = match plan_resize(dims(8, 6), ResizeSpec { target: dims(4, 4), mode: ResizeMode.Fill }) {
+        ResizeOut.Value { out, window } => out.w == 4 && out.h == 4 && window.x == 1 && window.y == 0 && window.w == 6 && window.h == 6,
+        ResizeOut.BadTarget => false,
+    };
+    return from_assertion(equals_bool(true, good, 6206));
+}
+
+test resize_rejects_bad_target() -> (result: TestResult) {
+    let bad: bool = match plan_resize(dims(8, 6), ResizeSpec { target: dims(0, 4), mode: ResizeMode.Fit }) {
+        ResizeOut.Value { out, window } => out.w != out.w,
+        ResizeOut.BadTarget => true,
+    };
+    return from_assertion(equals_bool(true, bad, 6207));
+}

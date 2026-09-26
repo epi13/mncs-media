@@ -1,0 +1,61 @@
+mncs 0.18;
+
+// Native contracts for resource budgets and the failure taxonomy.
+
+module mncs.media.test.limits.v1;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.media.dims;
+use mncs.media.pixfmt;
+use mncs.media.limits;
+use mncs.media.failures;
+
+test budget_accepts_fixture_scale() -> (result: TestResult) {
+    // Budget: 64-pixel lanes, 1024 decoded bytes. 8x6 RGB = 144 bytes.
+    let good: bool = match check_image_budget(dims(8, 6), PixFmt.Rgb8, budget(64, 1024)) {
+        BudgetOut.Value { bytes } => bytes == 144,
+        BudgetOut.LaneTooLarge => false,
+        BudgetOut.OverBytes => false,
+        BudgetOut.BadDims => false,
+    };
+    return from_assertion(equals_bool(true, good, 6701));
+}
+
+test decode_bomb_declared_dims_rejected() -> (result: TestResult) {
+    // Huge declared lane fails before any multiplication of trust:
+    // lane check fires first, independent of the byte budget.
+    let lane: bool = match check_image_budget(dims(100000, 100000), PixFmt.Rgb8, budget(64, 1024)) {
+        BudgetOut.Value { bytes } => bytes != bytes,
+        BudgetOut.LaneTooLarge => true,
+        BudgetOut.OverBytes => false,
+        BudgetOut.BadDims => false,
+    };
+    // Small lanes but over the byte budget: 64x64 RGBA = 16384 > 1024.
+    let overbytes: bool = match check_image_budget(dims(64, 64), PixFmt.Rgba8, budget(64, 1024)) {
+        BudgetOut.Value { bytes } => bytes != bytes,
+        BudgetOut.LaneTooLarge => false,
+        BudgetOut.OverBytes => true,
+        BudgetOut.BadDims => false,
+    };
+    let zero: bool = match check_image_budget(dims(0, 64), PixFmt.Rgb8, budget(64, 1024)) {
+        BudgetOut.Value { bytes } => bytes != bytes,
+        BudgetOut.LaneTooLarge => false,
+        BudgetOut.OverBytes => false,
+        BudgetOut.BadDims => true,
+    };
+    return from_assertion(equals_bool(true, lane && overbytes && zero, 6702));
+}
+
+test failure_codes_distinct() -> (result: TestResult) {
+    // Ten codes, all distinct: failures never collapse to "media error".
+    let a: u64 = error_code(MediaError.UnsupportedFormat);
+    let b: u64 = error_code(MediaError.Malformed);
+    let c: u64 = error_code(MediaError.Truncated);
+    let d: u64 = error_code(MediaError.DecodeFailure);
+    let e: u64 = error_code(MediaError.ResourceLimit);
+    let distinct: bool = a != b && b != c && c != d && d != e && a != e;
+    let backend: bool = is_backend_failure(fail_ctx(MediaError.DecodeFailure, 40, 0));
+    let modeling: bool = is_backend_failure(fail_ctx(MediaError.InvalidTransform, 0, 0)) == false;
+    return from_assertion(equals_bool(true, distinct && backend && modeling, 6703));
+}

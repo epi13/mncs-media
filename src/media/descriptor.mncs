@@ -1,0 +1,81 @@
+mncs 0.18;
+
+// mncs.media.descriptor.v1 — typed media artifacts, streams, and probe results.
+//
+// Three identities stay separate: the artifact LOCATION (where bytes
+// live, a host concern outside this module), the CONTENT identity
+// (digest + length of the exact bytes), and the SEMANTIC description
+// (kind, container, streams, dimensions). A renamed identical file
+// shares content identity but not location; a re-encode shares
+// semantics but not content. Stream descriptors carry the backend
+// stream index as an observation alongside a stable semantic position.
+
+module mncs.media.descriptor.v1;
+
+use mncs.media.dims;
+use mncs.media.pixfmt;
+
+// Top-level media kinds in scope. Audio/Video variants are declared so
+// descriptors can name them; backend operations for them are future
+// scope (see docs), not silent no-ops.
+enum MediaKind { Image, Audio, Video }
+
+// Containers in scope for the foundation slice.
+enum Container { Png, Raw }
+
+// Codec identity, distinct from container: PNG the container carries
+// the PNG codec; Raw carries uncompressed samples in a stated format.
+enum CodecId { PngCodec, RawSamples }
+
+// One stream inside a (possibly compound) artifact.
+record StreamDesc { position: u64, backend_index: u64, kind: MediaKind, codec: CodecId }
+
+fn stream_desc(position: u64, backend_index: u64, kind: MediaKind, codec: CodecId) -> (result: StreamDesc) {
+    return StreamDesc { position: position, backend_index: backend_index, kind: kind, codec: codec };
+}
+
+// Content identity: digest of the exact bytes plus their length.
+// The digest algorithm is a backend/tooling concern (Crypto for real
+// content identity); this record carries the value, never computes it.
+record ContentId { digest: u64, len: u64 }
+
+fn content_id(digest: u64, len: u64) -> (result: ContentId) {
+    return ContentId { digest: digest, len: len };
+}
+
+fn same_content(a: ContentId, b: ContentId) -> (result: bool) {
+    return a.digest == b.digest && a.len == b.len;
+}
+
+// Structural image description: everything required to interpret the
+// pixels, nothing descriptive.
+record ImageDesc { dims: Dims, fmt: PixFmt, container: Container }
+
+fn image_desc(d: Dims, f: PixFmt, c: Container) -> (result: ImageDesc) {
+    return ImageDesc { dims: d, fmt: f, container: c };
+}
+
+// Pixel count of the frame (logical; stride/padding excluded).
+fn pixel_count(d: ImageDesc) -> (result: u64) {
+    return d.dims.w * d.dims.h;
+}
+
+// Byte count of the decoded frame (logical; no stride).
+fn frame_bytes(d: ImageDesc) -> (result: u64) {
+    return pixel_count(d) * channels(d.fmt);
+}
+
+// Probe outcome: the descriptor plus its single stream, or a
+// structured reason (see failures module for the wider taxonomy).
+enum ProbeOut { Value { image: ImageDesc, stream: StreamDesc }, BadDims, UnknownFormat }
+
+fn probe_image(d: Dims, f: PixFmt, c: Container) -> (result: ProbeOut) {
+    return match check_dims(d) {
+        DimsCheck.Ok => ProbeOut.Value {
+            image: image_desc(d, f, c),
+            stream: stream_desc(0, 0, MediaKind.Image, CodecId.PngCodec),
+        },
+        DimsCheck.ZeroWidth => ProbeOut.BadDims,
+        DimsCheck.ZeroHeight => ProbeOut.BadDims,
+    };
+}

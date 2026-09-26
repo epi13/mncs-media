@@ -1,0 +1,79 @@
+mncs 0.18;
+
+// mncs.media.transform.v1 — typed transform plans over descriptors.
+//
+// A transform is a validated SPEC plus a computed OUTPUT descriptor,
+// never a command string. resize/crop geometry comes from the dims
+// module; format conversion classes from pixfmt. Every plan states
+// the metadata policy explicitly: Preserved (dims-independent
+// descriptive keys survive), Rewritten (geometry/metadata the op must
+// change: dimensions, pixel format), or Dropped (fields the op cannot
+// carry, e.g. alpha through a DropsAlpha conversion).
+
+module mncs.media.transform.v1;
+
+use mncs.media.dims;
+use mncs.media.pixfmt;
+use mncs.media.descriptor;
+
+enum MetaPolicy { Preserved, Rewritten, Dropped }
+
+// Resize plan: output descriptor plus the policy for the operation.
+record ResizePlan { out: ImageDesc, policy: MetaPolicy }
+
+enum PlanOut { Value { plan: ResizePlan }, BadTarget, BadSource }
+
+fn plan_resize_image(src: ImageDesc, spec: ResizeSpec) -> (result: PlanOut) {
+    return match check_dims(src.dims) {
+        DimsCheck.Ok => resize_planned(src, spec),
+        DimsCheck.ZeroWidth => PlanOut.BadSource,
+        DimsCheck.ZeroHeight => PlanOut.BadSource,
+    };
+}
+
+fn resize_planned(src: ImageDesc, spec: ResizeSpec) -> (result: PlanOut) {
+    return match plan_resize(src.dims, spec) {
+        ResizeOut.Value { out, window } => PlanOut.Value {
+            plan: ResizePlan { out: image_desc(out, src.fmt, src.container), policy: MetaPolicy.Rewritten },
+        },
+        ResizeOut.BadTarget => PlanOut.BadTarget,
+    };
+}
+
+// Crop plan: output descriptor plus policy.
+record CropPlan { out: ImageDesc, policy: MetaPolicy }
+
+enum CropPlanOut { Value { plan: CropPlan }, OutOfBounds, Empty, BadSource }
+
+fn plan_crop_image(src: ImageDesc, rect: CropRect) -> (result: CropPlanOut) {
+    return match check_dims(src.dims) {
+        DimsCheck.Ok => crop_planned(src, rect),
+        DimsCheck.ZeroWidth => CropPlanOut.BadSource,
+        DimsCheck.ZeroHeight => CropPlanOut.BadSource,
+    };
+}
+
+fn crop_planned(src: ImageDesc, rect: CropRect) -> (result: CropPlanOut) {
+    return match plan_crop(src.dims, rect) {
+        CropOut.Value { out } => CropPlanOut.Value {
+            plan: CropPlan { out: image_desc(out, src.fmt, src.container), policy: MetaPolicy.Rewritten },
+        },
+        CropOut.OutOfBounds => CropPlanOut.OutOfBounds,
+        CropOut.Empty => CropPlanOut.Empty,
+    };
+}
+
+// Conversion plan: output descriptor plus loss class and policy.
+// Lossless/Rewritten preserve descriptive metadata; DropsAlpha and
+// BackendDefined conversions mark affected fields Dropped.
+record ConvertPlan { out: ImageDesc, loss: LossClass, policy: MetaPolicy }
+
+fn plan_convert_image(src: ImageDesc, dst: PixFmt) -> (result: ConvertPlan) {
+    let loss: LossClass = conversion_class(src.fmt, dst);
+    let policy: MetaPolicy = match loss {
+        LossClass.Lossless => MetaPolicy.Preserved,
+        LossClass.DropsAlpha => MetaPolicy.Dropped,
+        LossClass.BackendDefined => MetaPolicy.Dropped,
+    };
+    return ConvertPlan { out: image_desc(src.dims, dst, src.container), loss: loss, policy: policy };
+}

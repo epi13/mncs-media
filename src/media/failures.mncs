@@ -1,0 +1,62 @@
+mncs 0.18;
+
+// mncs.media.failures.v1 — structured media failure taxonomy.
+//
+// Every backend/host failure maps to exactly one of these codes with
+// bounded context (byte offset, stream index); unbounded backend logs
+// never cross the boundary. In particular a codec failure is never
+// "media error": unsupported, malformed, truncated, refused-resource,
+// and backend-down are distinct outcomes with distinct handling.
+
+module mncs.media.failures.v1;
+
+enum MediaError {
+    UnsupportedFormat,
+    Malformed,
+    Truncated,
+    BackendUnavailable,
+    DecodeFailure,
+    EncodeFailure,
+    InvalidTransform,
+    ResourceLimit,
+    Cancelled,
+    IoFailure,
+}
+
+fn error_code(e: MediaError) -> (result: u64) {
+    return match e {
+        MediaError.UnsupportedFormat => 1,
+        MediaError.Malformed => 2,
+        MediaError.Truncated => 3,
+        MediaError.BackendUnavailable => 4,
+        MediaError.DecodeFailure => 5,
+        MediaError.EncodeFailure => 6,
+        MediaError.InvalidTransform => 7,
+        MediaError.ResourceLimit => 8,
+        MediaError.Cancelled => 9,
+        MediaError.IoFailure => 10,
+    };
+}
+
+// Bounded failure context: where (byte offset, u64::MAX when unknown)
+// and in which stream the failure occurred.
+record FailCtx { error: MediaError, byte_offset: u64, stream_index: u64 }
+
+fn fail_ctx(error: MediaError, byte_offset: u64, stream_index: u64) -> (result: FailCtx) {
+    return FailCtx { error: error, byte_offset: byte_offset, stream_index: stream_index };
+}
+
+fn is_backend_failure(c: FailCtx) -> (result: bool) {
+    return match c.error {
+        MediaError.UnsupportedFormat => false,
+        MediaError.Malformed => false,
+        MediaError.Truncated => false,
+        MediaError.BackendUnavailable => true,
+        MediaError.DecodeFailure => true,
+        MediaError.EncodeFailure => true,
+        MediaError.InvalidTransform => false,
+        MediaError.ResourceLimit => false,
+        MediaError.Cancelled => false,
+        MediaError.IoFailure => false,
+    };
+}

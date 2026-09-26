@@ -1,0 +1,115 @@
+mncs 0.18;
+
+// mncs.media.dims.v1 — logical image dimensions, crop rectangles, and
+// resize specifications with exact output geometry.
+//
+// Logical dimensions (coded width/height) are distinct from storage
+// representation (stride, padding): this module owns the logical side.
+// Crop rectangles that fall outside the frame or are empty are
+// structured rejections, never backend-dependent clamping. Resize
+// output geometry is computed with integer cross-multiplication, so
+// fit/fill decisions never depend on floating-point rounding.
+
+module mncs.media.dims.v1;
+
+// Logical coded dimensions. Both lanes >= 1; upper bounds are enforced
+// by the limits module against an explicit budget (not here).
+record Dims { w: u64, h: u64 }
+
+fn dims(w: u64, h: u64) -> (result: Dims) {
+    return Dims { w: w, h: h };
+}
+
+enum DimsCheck { Ok, ZeroWidth, ZeroHeight }
+
+fn check_dims(d: Dims) -> (result: DimsCheck) {
+    if d.w == 0 {
+        return DimsCheck.ZeroWidth;
+    }
+    if d.h == 0 {
+        return DimsCheck.ZeroHeight;
+    }
+    return DimsCheck.Ok;
+}
+
+fn dims_are_ok(c: DimsCheck) -> (result: bool) {
+    return match c {
+        DimsCheck.Ok => true,
+        DimsCheck.ZeroWidth => false,
+        DimsCheck.ZeroHeight => false,
+    };
+}
+
+// Crop rectangle in coded coordinates: origin (x, y), size (w, h).
+record CropRect { x: u64, y: u64, w: u64, h: u64 }
+
+enum CropOut { Value { out: Dims }, OutOfBounds, Empty }
+
+fn plan_crop(frame: Dims, rect: CropRect) -> (result: CropOut) {
+    if rect.w == 0 {
+        return CropOut.Empty;
+    }
+    if rect.h == 0 {
+        return CropOut.Empty;
+    }
+    if rect.x >= frame.w {
+        return CropOut.OutOfBounds;
+    }
+    if rect.y >= frame.h {
+        return CropOut.OutOfBounds;
+    }
+    if rect.x + rect.w > frame.w {
+        return CropOut.OutOfBounds;
+    }
+    if rect.y + rect.h > frame.h {
+        return CropOut.OutOfBounds;
+    }
+    return CropOut.Value { out: Dims { w: rect.w, h: rect.h } };
+}
+
+// Resize modes: Stretch ignores aspect; Fit scales to fit inside the
+// target preserving aspect; Fill scales to cover the target (output
+// dims equal the target; the covered source window is reported so the
+// required follow-up crop is explicit, never hidden).
+enum ResizeMode { Stretch, Fit, Fill }
+
+record ResizeSpec { target: Dims, mode: ResizeMode }
+
+// Fit output: scale = min(tw/sw, th/sh) via cross-multiplication
+// (tw*sh vs th*sw), then exact integer division. Target lanes must be
+// nonzero (validated by the caller through check_dims on target).
+fn fit_output(src: Dims, target: Dims) -> (result: Dims) {
+    if target.w * src.h <= target.h * src.w {
+        return Dims { w: target.w, h: src.h * target.w / src.w };
+    }
+    return Dims { w: src.w * target.h / src.h, h: target.h };
+}
+
+// Fill window: the source crop that covers the target aspect, reported
+// in source coordinates so the follow-up crop is explicit.
+fn fill_window(src: Dims, target: Dims) -> (result: CropRect) {
+    if src.w * target.h >= target.w * src.h {
+        let w: u64 = src.h * target.w / target.h;
+        return CropRect { x: (src.w - w) / 2, y: 0, w: w, h: src.h };
+    }
+    let h: u64 = src.w * target.h / target.w;
+    return CropRect { x: 0, y: (src.h - h) / 2, w: src.w, h: h };
+}
+
+enum ResizeOut { Value { out: Dims, window: CropRect }, BadTarget }
+
+fn plan_resize(src: Dims, spec: ResizeSpec) -> (result: ResizeOut) {
+    return match check_dims(spec.target) {
+        DimsCheck.Ok => resize_guarded(src, spec),
+        DimsCheck.ZeroWidth => ResizeOut.BadTarget,
+        DimsCheck.ZeroHeight => ResizeOut.BadTarget,
+    };
+}
+
+fn resize_guarded(src: Dims, spec: ResizeSpec) -> (result: ResizeOut) {
+    return match spec.mode {
+        ResizeMode.Stretch => ResizeOut.Value { out: spec.target, window: CropRect { x: 0, y: 0, w: src.w, h: src.h } },
+        ResizeMode.Fit => ResizeOut.Value { out: fit_output(src, spec.target), window: CropRect { x: 0, y: 0, w: src.w, h: src.h } },
+        ResizeMode.Fill => ResizeOut.Value { out: spec.target, window: fill_window(src, spec.target) },
+    };
+}

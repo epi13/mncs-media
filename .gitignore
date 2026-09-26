@@ -1,0 +1,5 @@
+# mncs-media build/test scratch (never commit run-evidence blobs)
+target/
+__pycache__/
+*.pyc
+.DS_Store

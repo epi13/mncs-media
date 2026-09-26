@@ -1,0 +1,46 @@
+mncs 0.18;
+
+// mncs.media.limits.v1 — explicit resource bounds for untrusted media.
+//
+// Encoded size never predicts decoded cost: a tiny file may declare
+// enormous dimensions. Every decode/materialization decision passes a
+// budget check first. Bounds are caller-supplied data (policies vary
+// by deployment), and violations are structured outcomes — including
+// which bound failed and the offending value.
+
+module mncs.media.limits.v1;
+
+use mncs.media.dims;
+use mncs.media.pixfmt;
+use mncs.media.descriptor;
+
+// Decode budget: maximum coded lanes and maximum decoded bytes.
+record Budget { max_lane: u64, max_bytes: u64 }
+
+fn budget(max_lane: u64, max_bytes: u64) -> (result: Budget) {
+    return Budget { max_lane: max_lane, max_bytes: max_bytes };
+}
+
+enum BudgetOut { Value { bytes: u64 }, LaneTooLarge, OverBytes, BadDims }
+
+fn check_image_budget(d: Dims, f: PixFmt, b: Budget) -> (result: BudgetOut) {
+    return match check_dims(d) {
+        DimsCheck.Ok => budget_guarded(d, f, b),
+        DimsCheck.ZeroWidth => BudgetOut.BadDims,
+        DimsCheck.ZeroHeight => BudgetOut.BadDims,
+    };
+}
+
+fn budget_guarded(d: Dims, f: PixFmt, b: Budget) -> (result: BudgetOut) {
+    if d.w > b.max_lane {
+        return BudgetOut.LaneTooLarge;
+    }
+    if d.h > b.max_lane {
+        return BudgetOut.LaneTooLarge;
+    }
+    let bytes: u64 = d.w * d.h * channels(f);
+    if bytes > b.max_bytes {
+        return BudgetOut.OverBytes;
+    }
+    return BudgetOut.Value { bytes: bytes };
+}

@@ -1,0 +1,29 @@
+{
+ "generator": "tools/media_backend.py gen-fixtures",
+ "pillow": "12.3.0",
+ "files": {
+  "grad8x6.png": {
+   "bytes": 83
+  },
+  "alpha4x4.png": {
+   "bytes": 89
+  },
+  "rgb4x4.png": {
+   "bytes": 81
+  },
+  "gray4x4.png": {
+   "bytes": 85
+  },
+  "meta8x6.png": {
+   "bytes": 130
+  },
+  "trunc40.bin": {
+   "bytes": 40,
+   "note": "truncated PNG header"
+  },
+  "notpng.bin": {
+   "bytes": 24,
+   "note": "wrong magic"
+  }
+ }
+}

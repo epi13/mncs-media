@@ -1,0 +1,89 @@
+mncs 0.18;
+
+// mncs.media.pixfmt.v1 — pixel-format descriptors with channel semantics.
+//
+// A pixel format names channel count, order, and alpha behavior — never
+// a bare string. Only the foundational in-scope formats are enumerated;
+// backend-specific formats arrive through the backend contract as
+// observed codes, never as silent substitutions. Media owns these
+// distinctions; generic byte arithmetic stays in Numeric/core.
+
+module mncs.media.pixfmt.v1;
+
+// Foundational pixel formats. Interleaved, 8-bit per channel.
+enum PixFmt { Gray8, Rgb8, Rgba8 }
+
+fn channels(f: PixFmt) -> (result: u64) {
+    return match f {
+        PixFmt.Gray8 => 1,
+        PixFmt.Rgb8 => 3,
+        PixFmt.Rgba8 => 4,
+    };
+}
+
+fn bytes_per_pixel(f: PixFmt) -> (result: u64) {
+    return channels(f);
+}
+
+fn has_alpha(f: PixFmt) -> (result: bool) {
+    return match f {
+        PixFmt.Gray8 => false,
+        PixFmt.Rgb8 => false,
+        PixFmt.Rgba8 => true,
+    };
+}
+
+// Backend interop codes: 1 gray, 2 RGB, 3 RGBA. Anything else is
+// explicitly unmapped — never guessed.
+enum PixCode { Known { fmt: PixFmt }, Unmapped }
+
+fn parse_pixfmt(code: u64) -> (result: PixCode) {
+    if code == 1 {
+        return PixCode.Known { fmt: PixFmt.Gray8 };
+    }
+    if code == 2 {
+        return PixCode.Known { fmt: PixFmt.Rgb8 };
+    }
+    if code == 3 {
+        return PixCode.Known { fmt: PixFmt.Rgba8 };
+    }
+    return PixCode.Unmapped;
+}
+
+// Conversion classes between formats: what information may change.
+// Lossless: every channel value survives. DropsAlpha: RGBA -> RGB
+// discards alpha (intentional, flagged). BackendDefined: luma policy
+// belongs to the backend (e.g. RGB -> gray coefficients).
+enum LossClass { Lossless, DropsAlpha, BackendDefined }
+
+fn conversion_class(src: PixFmt, dst: PixFmt) -> (result: LossClass) {
+    return match src {
+        PixFmt.Gray8 => gray_conversion(dst),
+        PixFmt.Rgb8 => rgb_conversion(dst),
+        PixFmt.Rgba8 => rgba_conversion(dst),
+    };
+}
+
+fn gray_conversion(dst: PixFmt) -> (result: LossClass) {
+    return match dst {
+        PixFmt.Gray8 => LossClass.Lossless,
+        PixFmt.Rgb8 => LossClass.Lossless,
+        PixFmt.Rgba8 => LossClass.Lossless,
+    };
+}
+
+fn rgb_conversion(dst: PixFmt) -> (result: LossClass) {
+    return match dst {
+        PixFmt.Gray8 => LossClass.BackendDefined,
+        PixFmt.Rgb8 => LossClass.Lossless,
+        PixFmt.Rgba8 => LossClass.Lossless,
+    };
+}
+
+fn rgba_conversion(dst: PixFmt) -> (result: LossClass) {
+    return match dst {
+        PixFmt.Gray8 => LossClass.BackendDefined,
+        PixFmt.Rgb8 => LossClass.DropsAlpha,
+        PixFmt.Rgba8 => LossClass.Lossless,
+    };
+}

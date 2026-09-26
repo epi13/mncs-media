@@ -1,0 +1,67 @@
+mncs 0.18;
+
+// Native contracts for sniffing, descriptors, and content identity.
+
+module mncs.media.test.sniffdesc.v1;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.media.sniff;
+use mncs.media.dims;
+use mncs.media.pixfmt;
+use mncs.media.descriptor;
+
+test png_signature_recognized() -> (result: TestResult) {
+    // Full 8-byte PNG signature: 137 80 78 71 13 10 26 10.
+    let magic: [byte; 8] = [137 as byte, 80 as byte, 78 as byte, 71 as byte, 13 as byte, 10 as byte, 26 as byte, 10 as byte];
+    let hit: bool = sniff_is_png(sniff8(magic));
+    return from_assertion(equals_bool(true, hit, 6401));
+}
+
+test wrong_and_short_magic_rejected() -> (result: TestResult) {
+    let wrong: [byte; 8] = [0 as byte, 1 as byte, 2 as byte, 3 as byte, 4 as byte, 5 as byte, 6 as byte, 7 as byte];
+    let miss: bool = sniff_is_png(sniff8(wrong)) == false;
+    // Right head, wrong tail (first 4 match, last 4 zeroed).
+    let tail: [byte; 8] = [137 as byte, 80 as byte, 78 as byte, 71 as byte, 0 as byte, 0 as byte, 0 as byte, 0 as byte];
+    let miss2: bool = sniff_is_png(sniff8(tail)) == false;
+    return from_assertion(equals_bool(true, miss && miss2, 6402));
+}
+
+test probe_builds_typed_descriptor() -> (result: TestResult) {
+    // grad8x6.png: 8x6 RGB still image, single stream.
+    let good: bool = match probe_image(dims(8, 6), PixFmt.Rgb8, Container.Png) {
+        ProbeOut.Value { image, stream } => image.dims.w == 8 && image.dims.h == 6
+            && channels(image.fmt) == 3
+            && stream.position == 0 && stream.backend_index == 0,
+        ProbeOut.BadDims => false,
+        ProbeOut.UnknownFormat => false,
+    };
+    let bad: bool = match probe_image(dims(0, 6), PixFmt.Rgb8, Container.Png) {
+        ProbeOut.Value { image, stream } => image.dims.w != image.dims.w,
+        ProbeOut.BadDims => true,
+        ProbeOut.UnknownFormat => false,
+    };
+    return from_assertion(equals_bool(true, good && bad, 6403));
+}
+
+test frame_byte_counts() -> (result: TestResult) {
+    // 8x6 RGB = 144 decoded bytes; 4x4 RGBA = 64; 4x4 gray = 16.
+    let rgb: bool = frame_bytes(image_desc(dims(8, 6), PixFmt.Rgb8, Container.Png)) == 144;
+    let rgba: bool = frame_bytes(image_desc(dims(4, 4), PixFmt.Rgba8, Container.Png)) == 64;
+    let gray: bool = frame_bytes(image_desc(dims(4, 4), PixFmt.Gray8, Container.Png)) == 16;
+    let px: bool = pixel_count(image_desc(dims(8, 6), PixFmt.Rgb8, Container.Png)) == 48;
+    return from_assertion(equals_bool(true, rgb && rgba && gray && px, 6404));
+}
+
+test content_identity_separate_from_location() -> (result: TestResult) {
+    // Same digest+len: same content. Different digest: different
+    // content even at the same dims. Location is not modeled here.
+    let a: ContentId = content_id(12345, 83);
+    let b: ContentId = content_id(12345, 83);
+    let same: bool = same_content(a, b);
+    let c: ContentId = content_id(99999, 83);
+    let diff: bool = same_content(a, c) == false;
+    let d: ContentId = content_id(12345, 84);
+    let difflen: bool = same_content(a, d) == false;
+    return from_assertion(equals_bool(true, same && diff && difflen, 6405));
+}

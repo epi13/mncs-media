@@ -1,0 +1,82 @@
+mncs 0.18;
+
+// Native contracts for transform plans: resize/crop output descriptors
+// and conversion loss policies.
+
+module mncs.media.test.transform.v1;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.media.dims;
+use mncs.media.pixfmt;
+use mncs.media.descriptor;
+use mncs.media.transform;
+
+test resize_plan_output_descriptor() -> (result: TestResult) {
+    // grad8x6 RGB -> fit 4x4: descriptor becomes 4x3 RGB, Rewritten.
+    let src: ImageDesc = image_desc(dims(8, 6), PixFmt.Rgb8, Container.Png);
+    let good: bool = match plan_resize_image(src, ResizeSpec { target: dims(4, 4), mode: ResizeMode.Fit }) {
+        PlanOut.Value { plan } => plan.out.dims.w == 4 && plan.out.dims.h == 3
+            && channels(plan.out.fmt) == 3,
+        PlanOut.BadTarget => false,
+        PlanOut.BadSource => false,
+    };
+    return from_assertion(equals_bool(true, good, 6501));
+}
+
+test resize_plan_bad_inputs() -> (result: TestResult) {
+    let src: ImageDesc = image_desc(dims(8, 6), PixFmt.Rgb8, Container.Png);
+    let bad_target: bool = match plan_resize_image(src, ResizeSpec { target: dims(0, 4), mode: ResizeMode.Fit }) {
+        PlanOut.Value { plan } => plan.out.dims.w != plan.out.dims.w,
+        PlanOut.BadTarget => true,
+        PlanOut.BadSource => false,
+    };
+    let bad_src: ImageDesc = image_desc(dims(0, 6), PixFmt.Rgb8, Container.Png);
+    let bad_source: bool = match plan_resize_image(bad_src, ResizeSpec { target: dims(4, 4), mode: ResizeMode.Fit }) {
+        PlanOut.Value { plan } => plan.out.dims.w != plan.out.dims.w,
+        PlanOut.BadTarget => false,
+        PlanOut.BadSource => true,
+    };
+    return from_assertion(equals_bool(true, bad_target && bad_source, 6502));
+}
+
+test crop_plan_output_descriptor() -> (result: TestResult) {
+    let src: ImageDesc = image_desc(dims(8, 6), PixFmt.Rgb8, Container.Png);
+    let good: bool = match plan_crop_image(src, CropRect { x: 2, y: 1, w: 2, h: 2 }) {
+        CropPlanOut.Value { plan } => plan.out.dims.w == 2 && plan.out.dims.h == 2,
+        CropPlanOut.OutOfBounds => false,
+        CropPlanOut.Empty => false,
+        CropPlanOut.BadSource => false,
+    };
+    let oob: bool = match plan_crop_image(src, CropRect { x: 7, y: 0, w: 2, h: 2 }) {
+        CropPlanOut.Value { plan } => plan.out.dims.w != plan.out.dims.w,
+        CropPlanOut.OutOfBounds => true,
+        CropPlanOut.Empty => false,
+        CropPlanOut.BadSource => false,
+    };
+    return from_assertion(equals_bool(true, good && oob, 6503));
+}
+
+test convert_plan_loss_policy() -> (result: TestResult) {
+    // RGBA -> RGB: DropsAlpha/Dropped. RGB -> RGB: Lossless/Preserved.
+    let src: ImageDesc = image_desc(dims(4, 4), PixFmt.Rgba8, Container.Png);
+    let drop: ConvertPlan = plan_convert_image(src, PixFmt.Rgb8);
+    let drop_ok: bool = match drop.loss {
+        LossClass.Lossless => false,
+        LossClass.DropsAlpha => true,
+        LossClass.BackendDefined => false,
+    };
+    let rgb: ImageDesc = image_desc(dims(4, 4), PixFmt.Rgb8, Container.Png);
+    let keep: ConvertPlan = plan_convert_image(rgb, PixFmt.Rgb8);
+    let keep_ok: bool = match keep.loss {
+        LossClass.Lossless => true,
+        LossClass.DropsAlpha => false,
+        LossClass.BackendDefined => false,
+    };
+    let policy_ok: bool = match drop.policy {
+        MetaPolicy.Preserved => false,
+        MetaPolicy.Rewritten => false,
+        MetaPolicy.Dropped => true,
+    };
+    return from_assertion(equals_bool(true, drop_ok && keep_ok && policy_ok, 6504));
+}

@@ -1,0 +1,42 @@
+mncs 0.18;
+
+// Native contracts for pixel kernels over fixture-derived vectors.
+// gray4x4.png decodes (backend-observed) to the ramp below; rgb4x4.png
+// to the interleaved triples below. Sampling convention: top-left
+// nearest neighbor — declared here, pinned here.
+
+module mncs.media.test.pixels.v1;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.media.pixels;
+
+test gray_downscale_exact() -> (result: TestResult) {
+    // Fixture ramp row-major: (y*4+x)*16.
+    let src: [byte; 16] = [0, 16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240];
+    let want: [byte; 4] = [0, 32, 128, 160];
+    let ok: bool = eq_bytes4(nn_downscale2_gray8(src), want);
+    return from_assertion(equals_bool(true, ok, 6601));
+}
+
+test rgb_downscale_exact() -> (result: TestResult) {
+    // Fixture rgb4x4: R = x*64, G = y*64, B = 128, row-major triples.
+    let src: [byte; 48] = [
+        0, 0, 128, 64, 0, 128, 128, 0, 128, 192, 0, 128,
+        0, 64, 128, 64, 64, 128, 128, 64, 128, 192, 64, 128,
+        0, 128, 128, 64, 128, 128, 128, 128, 128, 192, 128, 128,
+        0, 192, 128, 64, 192, 128, 128, 192, 128, 192, 192, 128,
+    ];
+    let want: [byte; 12] = [0, 0, 128, 128, 0, 128, 0, 128, 128, 128, 128, 128];
+    let ok: bool = eq_bytes12(nn_downscale2_rgb(src), want);
+    return from_assertion(equals_bool(true, ok, 6602));
+}
+
+test gray_crop_exact() -> (result: TestResult) {
+    // 2x2 crop of the ramp at origin (1,1): rows 1-2, cols 1-2.
+    let src: [byte; 16] = [0, 16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240];
+    let want: [byte; 4] = [80, 96, 144, 160];
+    let ok: bool = eq_bytes4(crop_gray8_4x4(src, 1, 1), want);
+    let corner: bool = eq_bytes4(crop_gray8_4x4(src, 0, 0), [0, 16, 64, 80]);
+    return from_assertion(equals_bool(true, ok && corner, 6603));
+}

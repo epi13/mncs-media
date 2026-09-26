@@ -1,0 +1,62 @@
+mncs 0.18;
+
+// Native contracts for pixel formats: channel semantics, alpha,
+// backend-code mapping, and conversion loss classes.
+
+module mncs.media.test.pixfmt.v1;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.media.pixfmt;
+
+test channels_and_alpha() -> (result: TestResult) {
+    let ch: bool = channels(PixFmt.Gray8) == 1 && channels(PixFmt.Rgb8) == 3 && channels(PixFmt.Rgba8) == 4;
+    let bpp: bool = bytes_per_pixel(PixFmt.Rgb8) == 3;
+    let al: bool = has_alpha(PixFmt.Rgba8) && has_alpha(PixFmt.Rgb8) == false && has_alpha(PixFmt.Gray8) == false;
+    return from_assertion(equals_bool(true, ch && bpp && al, 6101));
+}
+
+test backend_code_mapping() -> (result: TestResult) {
+    let gray: bool = match parse_pixfmt(1) {
+        PixCode.Known { fmt } => channels(fmt) == 1,
+        PixCode.Unmapped => false,
+    };
+    let rgb: bool = match parse_pixfmt(2) {
+        PixCode.Known { fmt } => channels(fmt) == 3,
+        PixCode.Unmapped => false,
+    };
+    // Unknown codes are explicitly unmapped, never guessed.
+    let strange: bool = match parse_pixfmt(99) {
+        PixCode.Known { fmt } => channels(fmt) == 99,
+        PixCode.Unmapped => true,
+    };
+    let zero: bool = match parse_pixfmt(0) {
+        PixCode.Known { fmt } => channels(fmt) == 0,
+        PixCode.Unmapped => true,
+    };
+    return from_assertion(equals_bool(true, gray && rgb && strange && zero, 6102));
+}
+
+test conversion_loss_classes() -> (result: TestResult) {
+    let same: bool = match conversion_class(PixFmt.Rgb8, PixFmt.Rgb8) {
+        LossClass.Lossless => true,
+        LossClass.DropsAlpha => false,
+        LossClass.BackendDefined => false,
+    };
+    let drop: bool = match conversion_class(PixFmt.Rgba8, PixFmt.Rgb8) {
+        LossClass.Lossless => false,
+        LossClass.DropsAlpha => true,
+        LossClass.BackendDefined => false,
+    };
+    let luma: bool = match conversion_class(PixFmt.Rgb8, PixFmt.Gray8) {
+        LossClass.Lossless => false,
+        LossClass.DropsAlpha => false,
+        LossClass.BackendDefined => true,
+    };
+    let widen: bool = match conversion_class(PixFmt.Gray8, PixFmt.Rgba8) {
+        LossClass.Lossless => true,
+        LossClass.DropsAlpha => false,
+        LossClass.BackendDefined => false,
+    };
+    return from_assertion(equals_bool(true, same && drop && luma && widen, 6103));
+}

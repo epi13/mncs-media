@@ -89,3 +89,48 @@ trust; lane check precedes byte multiplication. Decode bombs are
 `LaneTooLarge`/`OverBytes` data. Backend runs under argv + timeouts
 with bounded logs; malformed input is `MALFORMED`/`TRUNCATED`, never
 a crash (pinned with trunc40.bin).
+
+## Manifests: media as a projection of development state
+
+`mncs.media.manifest.v1` binds one media artifact to the development
+state it was derived from. A manifest carries the artifact kind, the
+source canonical generation, the derivation chain (parent manifest
+identities for derived artifacts), content binding, provenance, and
+an optional publication receipt link. Admission is native:
+content binding and provenance are required, derived artifacts must
+name parents, and only `Admitted` manifests may be receipted or
+cross-linked.
+
+Validity and executability stay separate: audio/video manifests
+admit as descriptors while backend execution remains image-only
+(`backend_executable`), so dispatchers never silently no-op a kind
+the backend cannot process. `derivation_current` marks a derived
+artifact older than its parent stale; `publication_claim_ok`
+requires a linked receipt for published claims.
+
+Wire shape (`mncs.media-manifest/1`):
+
+```json
+{"schema_version": "mncs.media-manifest/1", "artifact": "sha256:...",
+ "kind": "image", "content": "sha256:...", "semantic": {"dims": [8, 6]},
+ "derivation": ["sha256:parent"], "provenance": "sha256:...",
+ "source_generation": 5, "descriptor_only": false,
+ "targets": [], "receipt": null}
+```
+
+Session evidence feeds manifests through `mncs.session-evidence/1`:
+
+```json
+{"schema_version": "mncs.session-evidence/1", "generation": 5,
+ "commands": [], "tests": [], "diffs": [], "diagnostics": [],
+ "narrative": null, "provenance": "sha256:..."}
+```
+
+Reconcilers compare manifests, publishers receipt them, and
+downstream projections (journal, Atlas, website) cross-link from
+receipts. Video assembly, terminal replay, diagram generation, and
+external publishers (YouTube/Reddit/RSS) are greenfield consumers
+of this contract: they take session evidence plus manifests and
+emit receipts, and are never hard-coded as architecture. See
+mncs-automation RFC 0002 for the reconciliation loop and mncs-store
+RFC 0020 for receipt bytes.

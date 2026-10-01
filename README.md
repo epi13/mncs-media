@@ -50,7 +50,7 @@ scope, not implemented operations.
 
 ## Verification
 
-29 native `mncs test` declarations, 7/7 suites PASS
+35 native `mncs test` declarations, 8/8 suites PASS
 (`scripts/run_tests.py`); 17/17 backend integration checks
 (`scripts/run_backend_checks.py`, incl. PIL↔ffprobe agreement and the
 documented resampling-convention difference). Fixtures are generated,

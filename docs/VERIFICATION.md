@@ -1,6 +1,6 @@
 # Scientific verification
 
-## Native layer (29 declarations, 7/7 suites PASS)
+## Native layer (35 declarations, 8/8 suites PASS)
 
 - **pixfmt**: channel counts, alpha flags, backend-code mapping with
   explicit `Unmapped`, all four conversion classes.
@@ -27,6 +27,11 @@
   → `LaneTooLarge` before trust; 64x64 RGBA over 1 KiB budget →
   `OverBytes`; zero dims → `BadDims`; 10 failure codes distinct;
   backend vs modeling failures classified.
+- **manifest**: source image admits; derived without parents →
+  `EmptyDerivation`; missing content/provenance refused; audio/video
+  admit as descriptors but only naming-only manifests are backend
+  executable; derived-older-than-parent is stale; published claims
+  require a linked receipt.
 
 ## Backend boundary (17/17 checks PASS)
 

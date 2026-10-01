@@ -35,6 +35,7 @@ SUITES = [
     {"name": "transform", "source": os.path.join(NATIVE, "transform_tests.mncs")},
     {"name": "pixels", "source": os.path.join(NATIVE, "pixels_tests.mncs")},
     {"name": "limits", "source": os.path.join(NATIVE, "limits_tests.mncs")},
+    {"name": "manifest", "source": os.path.join(NATIVE, "manifest_tests.mncs")},
 ]
 
 

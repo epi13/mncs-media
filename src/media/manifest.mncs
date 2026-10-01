@@ -1,0 +1,84 @@
+mncs 0.18;
+
+// mncs.media.manifest.v1 — media artifact manifests and derivation policy.
+//
+// A manifest binds one media artifact to the development state it was
+// derived from: the canonical generation, the derivation chain, and the
+// provenance evidence. Manifests are what reconcilers compare, what
+// publishers receipt, and what downstream projections (journal entries,
+// Atlas pages, websites) cross-link. Byte locations stay a host
+// concern; content binding, derivation completeness, and currency are
+// native.
+//
+// Admission is about manifest integrity, not executability: an
+// audio/video manifest can be well-formed and provenance-bound even
+// though no backend renders it yet. `backend_executable` answers the
+// separate dispatch question, so callers never silently no-op a kind
+// the backend cannot process.
+
+module mncs.media.manifest.v1;
+
+use mncs.media.descriptor;
+
+// Manifest integrity verdicts. Only Admitted manifests may be
+// receipted or cross-linked.
+enum ManifestVerdict { Admitted, NoContent, NoProvenance, EmptyDerivation }
+
+// A manifest is admitted when it binds content identity, carries
+// provenance, and — when derived — names at least one parent.
+// `derived` distinguishes source artifacts (recorded, captured) from
+// artifacts computed from other artifacts (thumbnails, re-encodes,
+// assemblies).
+fn admit_manifest(kind: MediaKind, derived: bool, parent_count: u64, content_present: bool, provenance_present: bool) -> (result: ManifestVerdict) {
+    if content_present == false {
+        return ManifestVerdict.NoContent;
+    }
+    if provenance_present == false {
+        return ManifestVerdict.NoProvenance;
+    }
+    if derived && parent_count == 0 {
+        return ManifestVerdict.EmptyDerivation;
+    }
+    return match kind {
+        MediaKind.Image => ManifestVerdict.Admitted,
+        MediaKind.Audio => ManifestVerdict.Admitted,
+        MediaKind.Video => ManifestVerdict.Admitted,
+    };
+}
+
+fn manifest_ok(verdict: ManifestVerdict) -> (result: bool) {
+    return match verdict {
+        ManifestVerdict.Admitted => true,
+        ManifestVerdict.NoContent => false,
+        ManifestVerdict.NoProvenance => false,
+        ManifestVerdict.EmptyDerivation => false,
+    };
+}
+
+// Whether the backend can process this kind today. Image artifacts
+// are executable; audio/video are descriptor-only until a backend
+// slice lands, so only naming-only manifests (no byte operations)
+// are executable for them.
+fn backend_executable(kind: MediaKind, descriptor_only: bool) -> (result: bool) {
+    return match kind {
+        MediaKind.Image => true,
+        MediaKind.Audio => descriptor_only,
+        MediaKind.Video => descriptor_only,
+    };
+}
+
+// A derived artifact is current when it was built from its parent's
+// generation or newer. A derived artifact older than its parent is
+// stale and must regenerate before any authoritative claim.
+fn derivation_current(parent_generation: u64, derived_generation: u64) -> (result: bool) {
+    return derived_generation >= parent_generation;
+}
+
+// A publication claim over an artifact requires a linked receipt;
+// an unreceipted artifact must not be presented as published.
+fn publication_claim_ok(manifest_admitted: bool, receipt_present: bool, claimed_published: bool) -> (result: bool) {
+    if claimed_published == false {
+        return manifest_admitted;
+    }
+    return manifest_admitted && receipt_present;
+}

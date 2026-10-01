@@ -1,0 +1,84 @@
+mncs 0.18;
+
+// Native contracts for media manifests: admission integrity,
+// backend executability, derivation currency, and publication claims.
+
+module mncs.media.test.manifest.v1;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.media.descriptor;
+use mncs.media.manifest;
+
+fn is_admitted(verdict: ManifestVerdict) -> (result: bool) {
+    return match verdict {
+        ManifestVerdict.Admitted => true,
+        ManifestVerdict.NoContent => false,
+        ManifestVerdict.NoProvenance => false,
+        ManifestVerdict.EmptyDerivation => false,
+    };
+}
+
+test image_source_manifest_admits() -> (result: TestResult) {
+    let verdict: ManifestVerdict = admit_manifest(MediaKind.Image, false, 0, true, true);
+    return from_assertion(equals_bool(true, manifest_ok(verdict) && is_admitted(verdict), 6801));
+}
+
+test derived_manifest_needs_parents() -> (result: TestResult) {
+    let orphan: ManifestVerdict = admit_manifest(MediaKind.Image, true, 0, true, true);
+    let linked: ManifestVerdict = admit_manifest(MediaKind.Image, true, 2, true, true);
+    let orphan_refused: bool = match orphan {
+        ManifestVerdict.Admitted => false,
+        ManifestVerdict.NoContent => false,
+        ManifestVerdict.NoProvenance => false,
+        ManifestVerdict.EmptyDerivation => true,
+    };
+    return from_assertion(equals_bool(true, orphan_refused && manifest_ok(linked), 6802));
+}
+
+test content_and_provenance_required() -> (result: TestResult) {
+    let nocontent: ManifestVerdict = admit_manifest(MediaKind.Image, false, 0, false, true);
+    let noproof: ManifestVerdict = admit_manifest(MediaKind.Image, false, 0, true, false);
+    let content_refused: bool = match nocontent {
+        ManifestVerdict.Admitted => false,
+        ManifestVerdict.NoContent => true,
+        ManifestVerdict.NoProvenance => false,
+        ManifestVerdict.EmptyDerivation => false,
+    };
+    let proof_refused: bool = match noproof {
+        ManifestVerdict.Admitted => false,
+        ManifestVerdict.NoContent => false,
+        ManifestVerdict.NoProvenance => true,
+        ManifestVerdict.EmptyDerivation => false,
+    };
+    return from_assertion(equals_bool(true, content_refused && proof_refused, 6803));
+}
+
+test audio_video_admit_but_defer_backend() -> (result: TestResult) {
+    let audio: ManifestVerdict = admit_manifest(MediaKind.Audio, false, 0, true, true);
+    let video: ManifestVerdict = admit_manifest(MediaKind.Video, false, 0, true, true);
+    let audio_named: bool = backend_executable(MediaKind.Audio, true);
+    let audio_bytes: bool = backend_executable(MediaKind.Audio, false);
+    let video_bytes: bool = backend_executable(MediaKind.Video, false);
+    let image_bytes: bool = backend_executable(MediaKind.Image, false);
+    let ok: bool = manifest_ok(audio) && manifest_ok(video)
+        && audio_named && audio_bytes == false
+        && video_bytes == false && image_bytes;
+    return from_assertion(equals_bool(true, ok, 6804));
+}
+
+test stale_derivation_detected() -> (result: TestResult) {
+    let current: bool = derivation_current(7, 7);
+    let newer: bool = derivation_current(7, 9);
+    let stale: bool = derivation_current(9, 7);
+    return from_assertion(equals_bool(true, current && newer && stale == false, 6805));
+}
+
+test publication_claim_needs_receipt() -> (result: TestResult) {
+    let unpublished: bool = publication_claim_ok(true, false, false);
+    let receipted: bool = publication_claim_ok(true, true, true);
+    let unreceipted: bool = publication_claim_ok(true, false, true);
+    let bad_manifest: bool = publication_claim_ok(false, true, true);
+    let ok: bool = unpublished && receipted && unreceipted == false && bad_manifest == false;
+    return from_assertion(equals_bool(true, ok, 6806));
+}

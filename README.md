@@ -1,5 +1,8 @@
 # mncs-media
 
+<!-- MNCS:generated:begin -->
+<!-- MNCS:generated:end -->
+
 High-level machine-native media infrastructure for MNCS.
 
 `mncs-media` is the first and only canonical Media implementation: no

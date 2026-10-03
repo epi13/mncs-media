@@ -1,0 +1,23 @@
+{
+  "capabilities": [
+    {
+      "contract": "media-operations",
+      "fingerprint_sources": [
+        "src/media/",
+        "tools/media_backend.py"
+      ],
+      "kind": "mncs-library",
+      "stability": "experimental",
+      "version": "0.1"
+    }
+  ],
+  "dependencies": [],
+  "entry": [
+    "python3 scripts/run_tests.py"
+  ],
+  "purpose": "Canonical machine-native media infrastructure for MNCS: media semantics (descriptors, formats, streams, timebases, specs, validation, geometry) in MNCS with a narrow host backend adapter for byte-level operations, plus a determinism-gated conformance corpus.",
+  "repository": "mncs-media",
+  "schema_version": "mncs.project-view/1",
+  "source_identity": "sha256:318a60a5c2b39213358e56c9b2f02b533106a6d3fdf860038443572b046e5c4a",
+  "structure": {}
+}

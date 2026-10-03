@@ -1,6 +1,19 @@
 # mncs-media
 
 <!-- MNCS:generated:begin -->
+## Project entry
+
+Canonical machine-native media infrastructure for MNCS: media semantics (descriptors, formats, streams, timebases, specs, validation, geometry) in MNCS with a narrow host backend adapter for byte-level operations, plus a determinism-gated conformance corpus.
+
+```bash
+python3 scripts/run_tests.py
+```
+
+Declared capabilities (declarations do not establish execution health):
+
+- `media-operations/0.1` — mncs-library (experimental)
+
+Semantic sources and ownership: `.mncs/projections.json`.
 <!-- MNCS:generated:end -->
 
 High-level machine-native media infrastructure for MNCS.
